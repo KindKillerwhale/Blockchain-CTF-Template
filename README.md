@@ -13,9 +13,11 @@ This repository provides a template for building Capture The Flag (CTF) challeng
 
 3. Set the ```docker-compose.yml``` and ```Dockerfile```.
 
-4. Set the ex.py.
+4. Set RPC_URL in ```app.py```.
 
-5. Docker RUN and TEST~!
+5. Set the ex.py.
+
+6. Docker RUN and TEST~!
 
 ※ Transaction must conform to the legacy format (including ```gasPrice``` option)
 
