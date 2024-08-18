@@ -8,6 +8,8 @@ import aiohttp
 from flask import Flask, jsonify, request
 from web3 import Web3
 from web3.middleware import geth_poa_middleware
+import uuid
+
 
 app = Flask(__name__)
 
@@ -83,7 +85,7 @@ def deploy_contract_for_user(user_id):
 
     with open("/shared/accounts.json") as f:
         accounts_data = json.load(f)
-    
+
     ganache_accounts = accounts_data["addresses"]
     private_keys = accounts_data["private_keys"]
     # If you use 'ganache-cli', use the code below
@@ -116,6 +118,7 @@ def deploy_contract_for_user(user_id):
                 "walletAddress": deployer,
                 "privateKey": private_key,
                 "rpcUrl": rpc_url,
+                "user_id": user_id
             }
 
             user_data[user_id] = deployment_info
@@ -127,15 +130,32 @@ def deploy_contract_for_user(user_id):
 
     return user_data[user_id]
 
+def gen_uuid():
+    rand_uuid = str(uuid.uuid4())
+    while rand_uuid in user_data:
+        rand_uuid = str(uuid.uuid4())
+    return rand_uuid
+
+
 @app.route('/info', methods=['GET'])
 def info():
-    user_id = request.remote_addr
+    user_id = gen_uuid()
     deployment_info = deploy_contract_for_user(user_id)
+    return jsonify({"user_id": user_id})
+
+@app.route('/info/<user_id>', methods=['GET'])
+def info_with_id(user_id):
+    if user_id not in user_data:
+        return error_response(RESULT_UNAVAILABLE, 400)
+
+    deployment_info = user_data[user_id]
     return jsonify(deployment_info)
 
-@app.route('/flag', methods=['GET'])
-def flag():
-    user_id = request.remote_addr
+@app.route('/flag/<user_id>', methods=['GET'])
+def flag(user_id):
+    if user_id not in user_data:
+        return error_response(RESULT_UNAVAILABLE, 400)
+
     deployment_info = deploy_contract_for_user(user_id)
     contract_address = deployment_info['contractAddress']
     wallet_address = deployment_info['walletAddress']
@@ -143,7 +163,9 @@ def flag():
     contract = web3.eth.contract(address=contract_address, abi=contract_abi)
     solved = contract.functions.isChallSolved().call({'from': wallet_address})
 
-    result = "Challenge Solved!!" if solved else "Challenge Not Solved"
+    flag = open("./flag.txt", "r").read()
+
+    result = f"Challenge Solved!! {flag}" if solved else "Challenge Not Solved"
     with open(f'result_{user_id}.txt', 'w') as f:
         f.write(result)
 
@@ -188,16 +210,6 @@ async def interact(user_id):
     except Exception as e:
         print(f"Exception: {e}")
         return error_response(RESULT_UNAVAILABLE, 500, request_id)
-
-@app.route('/restart', methods=['GET'])
-def restart():
-    try:
-        os.remove('deployment_info.json')
-    except FileNotFoundError:
-        pass
-    user_data.clear()
-    deployment_info = deploy_contract_for_user(request.remote_addr)
-    return jsonify(deployment_info)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
